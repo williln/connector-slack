@@ -22,7 +22,7 @@ class ConnectorSlack(Connector):
     def __init__(self, config):
         """ Setup the connector """
         _LOGGER.debug("Starting Slack connector")
-        self.name = "custom_slack"
+        self.name = "slack"
         self.config = config
         self.opsdroid = None
         self.default_room = config.get("default-room", "#general")
