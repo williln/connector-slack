@@ -22,13 +22,13 @@ class ConnectorSlack(Connector):
     def __init__(self, config):
         """ Setup the connector """
         _LOGGER.debug("Starting Slack connector")
-        self.name = "slack"
+        self.name = "custom_slack"
         self.config = config
         self.opsdroid = None
         self.default_room = config.get("default-room", "#general")
         self.icon_emoji = config.get("icon-emoji", ':robot_face:')
         self.token = config["api-token"]
-        self.sc = Slacker(self.token)
+        self.slack = Slacker(self.token)
         self.bot_name = config.get("bot-name", 'opsdroid')
         self.known_users = {}
         self.keepalive = None
@@ -43,7 +43,7 @@ class ConnectorSlack(Connector):
         _LOGGER.info("Connecting to Slack")
 
         try:
-            connection = await self.sc.rtm.start()
+            connection = await self.slack.rtm.start()
             self.ws = await websockets.connect(connection.body['url'])
 
             _LOGGER.debug("Connected as %s", self.bot_name)
@@ -53,7 +53,8 @@ class ConnectorSlack(Connector):
 
             if self.keepalive is None or self.keepalive.done():
                 self.keepalive = self.opsdroid.eventloop.create_task(
-                                                self.keepalive_websocket())
+                    self.keepalive_websocket()
+                )
         except aiohttp.errors.ClientOSError as e:
             _LOGGER.error(e)
             _LOGGER.error("Failed to connect to Slack, retrying in 10")
@@ -99,13 +100,18 @@ class ConnectorSlack(Connector):
                 message = Message(m["text"], user_info["name"], m["channel"], self)
                 await opsdroid.parse(message)
 
-    async def respond(self, message):
+    async def respond(self, message, attachments=None):
         """ Respond with a message """
         _LOGGER.debug("Responding with: '" + message.text +
                       "' in room " + message.room)
-        await self.sc.chat.post_message(message.room, message.text,
-                                        as_user=False, username=self.bot_name,
-                                        icon_emoji=self.icon_emoji)
+        await self.slack.chat.post_message(
+            message.room,
+            message.text,
+            as_user=False,
+            username=self.bot_name,
+            icon_emoji=self.icon_emoji,
+            attachments=attachments,
+        )
 
     async def keepalive_websocket(self):
         while True:
@@ -127,7 +133,7 @@ class ConnectorSlack(Connector):
         if userid in self.known_users:
             user_info = self.known_users[userid]
         else:
-            response = await self.sc.users.info(userid)
+            response = await self.slack.users.info(userid)
             user_info = response.body["user"]
             if type(user_info) is dict:
                 self.known_users[userid] = user_info
